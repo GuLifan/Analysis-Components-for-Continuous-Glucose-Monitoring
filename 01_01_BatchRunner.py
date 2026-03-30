@@ -11,11 +11,13 @@ import json
 import os
 from datetime import timedelta
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # --- 1. 全局配置 (Global Configuration) ---
 # 这些配置将应用于所有任务，除非在具体任务中被覆盖
 # 路径相关
-OUTPUT_FOLDER = r"C:\Users\lifan\Desktop\00_Outputs"
-DATETAG = "DRQ260122"
+OUTPUT_FOLDER = r"C:\\Users\\lifan\\Desktop\\00_Outputs"
+DATETAG = "DRQ260122Nova"
 
 # 计算开关 (指定一次即可)
 GLOBAL_CALC_GROUPS = {
@@ -32,18 +34,18 @@ GLOBAL_CALC_GROUPS = {
 GLOBAL_DAILY_OUTPUT = False  # 是否输出每日详细数据
 
 # --- 计算参数 (全局设置) ---
-GLOBAL_MODE = 5
+GLOBAL_MODE = 7
 GLOBAL_DURING = 7
-GLOBAL_INTERIM = 6
-COMMON_TAG = "D7afterDischarge"
+GLOBAL_INTERIM = 8
+COMMON_TAG = "InsulinPump"
 # mode0: 开始时间~开始时间+duringday天，对应 D1-3、D1-5、D1-7、D1-14
 # mode1: 开始时间+interimday天~开始时间+duringday天，对应D9-14、D7-14、D6-11
-# mode2: 开始时间~结束时间，对应D all
-# mode3: 出院时间-duringday天~出院时间，对应出院前3天
-# mode4: 入院时间(实际上是血糖监测的开始时间)~出院时间，对应住院期间
-# mode5: 出院时间~出院时间+duringday天，对应出院后1周
-# mode6: 出院时间~结束时间，对应出院后全部时间
-# mode7: 胰岛素泵使用时间，对应胰岛素泵期间
+# mode2: 开始时间~结束时间，对应D-all
+# mode3: 出院时间-duringday天~出院时间，对应出院前3天 D3beforeDischarge
+# mode4: 入院时间(实际上是血糖监测的开始时间)~出院时间，对应住院期间 DuringHospitalization
+# mode5: 出院时间~出院时间+duringday天，对应出院后1周 D7afterDischarge
+# mode6: 出院时间~结束时间，对应出院后全部时间 DayAllAfterDischarge
+# mode7: 胰岛素泵使用时间，对应胰岛素泵期间 InsulinPump
 
 
 # --- 2. 任务列表 (Task List) ---
@@ -51,50 +53,38 @@ COMMON_TAG = "D7afterDischarge"
 # 必须包含: description, nametag, patient_list, data_folder
 # 可选包含: match_by (默认 sensor_id，phone_number)
 # 注意: mode, during, interim 将使用上述全局设置
+"""
 TASKS = [
     # 示例任务 1: 处理 DataRequest2505EX
     {
         "description": f"Source 1 - MODE{GLOBAL_MODE} {COMMON_TAG}",
-        "patient_list": r"C:\Users\lifan\Desktop\03_Requests\DataRequest2505EX.xlsx",
-        "data_folder": r"C:\Users\lifan\Desktop\04_SelectedData\DataSelected2505EX",
+        "patient_list": r"C:\\Users\\lifan\\Desktop\\03_Requests\\2505EX.xlsx",
+        "data_folder": r"C:\\Users\\lifan\\Desktop\\04_SelectedData\\DataSelectedFor2505EX",
         "match_by": "sensor_id",
         "nametag": f"2505EX_{COMMON_TAG}",
     },
     {
         "description": f"Source 2 - MODE{GLOBAL_MODE} {COMMON_TAG}",
-        "patient_list": r"C:\Users\lifan\Desktop\03_Requests\DataRequest2505IN.xlsx",
-        "data_folder": r"C:\Users\lifan\Desktop\04_SelectedData\DataSelected2505IN",
+        "patient_list": r"C:\\Users\\lifan\\Desktop\\03_Requests\\2505IN.xlsx",
+        "data_folder": r"C:\\Users\\lifan\\Desktop\\04_SelectedData\\DataSelectedFor2505IN",
         "match_by": "sensor_id",
         "nametag": f"2505IN_{COMMON_TAG}",
     },
     {
         "description": f"Source 3 - MODE{GLOBAL_MODE} {COMMON_TAG}",
-        "patient_list": r"C:\Users\lifan\Desktop\03_Requests\DataRequest2412EX.xlsx",
-        "data_folder": r"C:\Users\lifan\Desktop\04_SelectedData\DataSelected2412EX",
+        "patient_list": r"C:\\Users\\lifan\\Desktop\\03_Requests\\2412EX.xlsx",
+        "data_folder": r"C:\\Users\\lifan\\Desktop\\04_SelectedData\\DataSelectedFor2412EX",
         "match_by": "phone_number",
         "nametag": f"2412EX_{COMMON_TAG}",
     },
     {
         "description": f"Source 4 - MODE{GLOBAL_MODE} {COMMON_TAG}",
-        "patient_list": r"C:\Users\lifan\Desktop\03_Requests\DataRequest2412IN.xlsx",
-        "data_folder": r"C:\Users\lifan\Desktop\04_SelectedData\DataSelected2412IN",
+        "patient_list": r"C:\\Users\\lifan\\Desktop\\03_Requests\\2412IN.xlsx",
+        "data_folder": r"C:\\Users\\lifan\\Desktop\\04_SelectedData\\DataSelectedFor2412IN",
         "match_by": "phone_number",
         "nametag": f"2412IN_{COMMON_TAG}",
-    },
-    {
-        "description": f"Source 5 - MODE{GLOBAL_MODE} {COMMON_TAG}",
-        "patient_list": r"C:\Users\lifan\Desktop\03_Requests\DataRequest2407EX.xlsx",
-        "data_folder": r"C:\Users\lifan\Desktop\04_SelectedData\DataSelected2407EX",
-        "match_by": "phone_number",
-        "nametag": f"2407EX_{COMMON_TAG}",
-    },
-    {
-        "description": f"Source 6 - MODE{GLOBAL_MODE} {COMMON_TAG}",
-        "patient_list": r"C:\Users\lifan\Desktop\03_Requests\DataRequest2407IN.xlsx",
-        "data_folder": r"C:\Users\lifan\Desktop\04_SelectedData\DataSelected2407IN",
-        "match_by": "phone_number",
-        "nametag": f"2407IN_{COMMON_TAG}",
     }
+
     # 示例任务 2: 处理 Source 2 (请修改路径)
     # {
     #     "description": "Source 2 - Standard Config",
@@ -105,8 +95,29 @@ TASKS = [
     # },
 ]
 
+"""
+
+TASKS = [
+# 示例任务 1: 处理 DataRequest2505EX
+
+{
+    "description": f"Source 2 - MODE{GLOBAL_MODE} {COMMON_TAG}",
+    "patient_list": r"C:\\Users\\lifan\\Desktop\\03_Requests\\2505IN_Pump.xlsx",
+    "data_folder": r"C:\\Users\\lifan\\Desktop\\04_SelectedData\\DataSelectedFor2505IN_Pump",
+    "match_by": "sensor_id",
+    "nametag": f"2505IN_{COMMON_TAG}",
+},
+{
+    "description": f"Source 4 - MODE{GLOBAL_MODE} {COMMON_TAG}",
+    "patient_list": r"C:\\Users\\lifan\\Desktop\\03_Requests\\2412IN_Pump.xlsx",
+    "data_folder": r"C:\\Users\\lifan\\Desktop\\04_SelectedData\\DataSelectedFor2412IN_Pump",
+    "match_by": "phone_number",
+    "nametag": f"2412IN_{COMMON_TAG}",
+}
+]
+
 # --- 3. 执行引擎 (Execution Engine) ---
-SCRIPT_PATH = "01_02_Calculation.py"
+SCRIPT_PATH = os.path.join(BASE_DIR, "01_02_Calculation.py")
 PYTHON_EXE = sys.executable
 
 def format_time(seconds):
@@ -177,7 +188,7 @@ def run():
         task_start = time.time()
         try:
             # 捕获输出以免刷屏，只显示结果
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=BASE_DIR)
             task_dur = time.time() - task_start
             
             if result.returncode == 0:

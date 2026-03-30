@@ -36,6 +36,7 @@ output_folder = config_data.get('output_folder', '')
 CALC_GROUPS = config_data.get('calc_groups', {})
 MATCH_BY = config_data.get('match_by', 'sensor_id')
 daily_output = config_data.get('daily_output', False)
+REQUEST_COLUMNS = config_data.get('request_columns', {})
 
 def get_output_filename(current_mode):
     template = config_data.get('output_filename_template', "CGM_{nametag}_Mode{mode}_Results.xlsx")
@@ -388,6 +389,13 @@ def calc_range_stats(df, prefix=''):
     res[f'TBR1{prefix}'] = calc_ratio(np.sum((g >= 3.0) & (g < 3.9)))
     # TBR Level 2: < 3.0
     res[f'TBR2{prefix}'] = calc_ratio(np.sum(g < 3.0))
+    res[f'GRI{prefix}'] = round(
+        3.0 * res[f'TBR2{prefix}']
+        + 2.4 * res[f'TBR1{prefix}']
+        + 1.6 * res[f'TAR2{prefix}']
+        + 0.8 * res[f'TAR1{prefix}'],
+        4
+    )
     # TITR: 3.9 - 7.8 (修正为标准定义，防止 TIR-TITR 出现负数)
     res[f'TITR{prefix}'] = calc_ratio(np.sum((g >= 3.9) & (g <= 7.8)))
     
@@ -1331,6 +1339,79 @@ def find_patient_file(device_id, folder_path):
     return None
 
 
+def _extract_request_series(df, spec):
+    if spec is None:
+        return None
+
+    if isinstance(spec, str):
+        spec_str = spec.strip()
+        if spec_str in df.columns:
+            return df[spec_str]
+        if spec_str.isdigit():
+            spec = int(spec_str)
+        else:
+            return None
+
+    if isinstance(spec, (int, np.integer)):
+        idx = int(spec)
+        if idx >= 1:
+            idx = idx - 1
+        if 0 <= idx < df.shape[1]:
+            return df.iloc[:, idx]
+        return None
+
+    return None
+
+
+def normalize_request_df(patient_df, request_columns):
+    standard_fields = [
+        'hospital_id',
+        'pump_start_time',
+        'pump_end_time',
+        'discharge_time',
+        'admission_time',
+        'sensor_id',
+        'phone_number'
+    ]
+
+    if isinstance(request_columns, dict) and request_columns:
+        out_df = patient_df.copy()
+        for field in standard_fields:
+            series = _extract_request_series(patient_df, request_columns.get(field))
+            if series is not None:
+                out_df[field] = series
+            elif field not in out_df.columns:
+                out_df[field] = np.nan
+        return out_df
+
+    if set(standard_fields).issubset(set(patient_df.columns)):
+        return patient_df
+
+    out_df = patient_df.copy()
+    if len(out_df.columns) >= 7:
+        out_df.columns = ['hospital_id', 'pump_start_time', 'pump_end_time', 'discharge_time', 'admission_time', 'sensor_id', 'phone_number'] + list(out_df.columns[7:])
+    elif len(out_df.columns) >= 6:
+        out_df.columns = ['hospital_id', 'pump_start_time', 'pump_end_time', 'discharge_time', 'admission_time', 'sensor_id'] + list(out_df.columns[6:])
+        if 'phone_number' not in out_df.columns:
+            out_df['phone_number'] = np.nan
+    elif len(out_df.columns) >= 5:
+        out_df.columns = ['hospital_id', 'pump_start_time', 'pump_end_time', 'discharge_time', 'admission_time'] + list(out_df.columns[5:])
+        if 'sensor_id' not in out_df.columns:
+            out_df['sensor_id'] = np.nan
+        if 'phone_number' not in out_df.columns:
+            out_df['phone_number'] = np.nan
+    else:
+        out_df['hospital_id'] = out_df.iloc[:, 0] if len(out_df.columns) >= 1 else np.nan
+        out_df['admission_time'] = np.nan
+        out_df['discharge_time'] = np.nan
+        out_df['pump_start_time'] = np.nan
+        out_df['pump_end_time'] = np.nan
+        out_df['sensor_id'] = np.nan
+        out_df['phone_number'] = np.nan
+
+    return out_df
+
+
 def main(selected_mode=None):
     # 使用命令行参数指定的模式，如果有的话
     current_mode = selected_mode if selected_mode is not None else mode
@@ -1341,49 +1422,32 @@ def main(selected_mode=None):
     
     # 读取患者列表
     try:
-        patient_df = pd.read_excel(patient_list_file)
-        # 确保列名正确，如果没有列名，则设置列名
-        if len(patient_df.columns) >= 7:
-            # Columns: Hospital ID, Pump Start, Pump End, Discharge, Admission, Sensor ID, Phone Number
-            patient_df.columns = ['hospital_id', 'pump_start_time', 'pump_end_time', 'discharge_time', 'admission_time', 'sensor_id', 'phone_number'] + list(patient_df.columns[7:])
-        elif len(patient_df.columns) >= 6:
-             # Just in case phone is missing but we have sensor_id
-            patient_df.columns = ['hospital_id', 'pump_start_time', 'pump_end_time', 'discharge_time', 'admission_time', 'sensor_id'] + list(patient_df.columns[6:])
-        elif len(patient_df.columns) >= 5:
-            # Columns: Hospital ID, Pump Start, Pump End, Discharge, Admission
-            patient_df.columns = ['hospital_id', 'pump_start_time', 'pump_end_time', 'discharge_time', 'admission_time'] + list(patient_df.columns[5:])
-        else:
-            print("患者列表文件格式不正确，至少需要5列数据")
-            return
+        patient_df_raw = pd.read_excel(patient_list_file)
+        patient_df = normalize_request_df(patient_df_raw, REQUEST_COLUMNS)
     except Exception as e:
         print(f"无法读取患者列表文件 {patient_list_file}: {e}")
         return
     
     # 转换时间格式
-    patient_df['admission_time'] = pd.to_datetime(patient_df['admission_time'], errors='coerce')
-    patient_df['discharge_time'] = pd.to_datetime(patient_df['discharge_time'], errors='coerce')
-    patient_df['pump_start_time'] = pd.to_datetime(patient_df['pump_start_time'], errors='coerce')
-    patient_df['pump_end_time'] = pd.to_datetime(patient_df['pump_end_time'], errors='coerce')
+    for time_col in ['admission_time', 'discharge_time', 'pump_start_time', 'pump_end_time']:
+        if time_col in patient_df.columns:
+            patient_df[time_col] = pd.to_datetime(patient_df[time_col], errors='coerce')
     
     # 定义一个空列表，用于存储处理结果
     results = []
     
     # 遍历患者列表
     for index, row in patient_df.iterrows():
-        hospital_id = row['hospital_id']
-        admission_time = row['admission_time']
-        discharge_time = row['discharge_time']
-        pump_start_time = row['pump_start_time']
-        pump_end_time = row['pump_end_time']
+        hospital_id = row.get('hospital_id', None)
+        admission_time = row.get('admission_time', None)
+        discharge_time = row.get('discharge_time', None)
+        pump_start_time = row.get('pump_start_time', None)
+        pump_end_time = row.get('pump_end_time', None)
         
         # Determine matching key based on configuration
-        match_key = None
-        if MATCH_BY == 'sensor_id' and 'sensor_id' in row:
-             match_key = row['sensor_id']
-        elif MATCH_BY == 'phone_number' and 'phone_number' in row:
-             match_key = row['phone_number']
-        else:
-             match_key = hospital_id
+        match_key = row.get(MATCH_BY, None) if MATCH_BY in patient_df.columns else None
+        if pd.isna(match_key) or match_key is None:
+            match_key = hospital_id
              
         if pd.isna(match_key):
              print(f"警告: 患者 {hospital_id} 的匹配键 {MATCH_BY} 为空，跳过匹配")

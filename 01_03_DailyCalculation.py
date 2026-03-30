@@ -1,7 +1,7 @@
 # 01_03_DailyCalculation.py
 # 基于 01_02_Calculation.py 修改
 # 功能：Mode 0 模式下，指定天数（duringday），输出每日详细指标（列展开）
-# LAST UPDATE BY LIFANGU IN 202602090032
+# LAST UPDATE BY LIFANGU IN 20260325
 
 import os
 import pandas as pd
@@ -10,27 +10,39 @@ from datetime import datetime, time, timedelta
 import numpy as np
 import argparse
 import json
+import yaml
 
 # --- 1. 内嵌配置 (Hardcoded Configuration) ---
 
 # 模式设置 (强制 Mode 0)
 MODE = 0
 
+FILETAG = "2412IN"
 # 日期参数
 DURING_DAY = 14  # 计算范围（天数），例如 14 天，科内14天，科外3天
 INTERIM_DAY = 0 # Mode 0 不使用
 
+
+if FILETAG == "2505IN" or FILETAG == "2505EX":
+    # 匹配设置
+    MATCH_BY = 'sensor_id' # 'sensor_id', 'phone_number', 'hospital_id'
+else:
+    MATCH_BY = 'phone_number' # 'sensor_id', 'phone_number', 'hospital_id'
+
+if FILETAG == "2505IN" or FILETAG == "2412IN":
+    DURING_DAY = 14
+else:
+    DURING_DAY = 3
+    
 # 路径设置
-PATIENT_LIST_FILE = r"C:\Users\lifan\Desktop\03_Requests\DataRequest2505IN.xlsx"
-DATA_FOLDER = r"C:\Users\lifan\Desktop\04_SelectedData\DataSelected2505IN"
-OUTPUT_FOLDER = r"C:\Users\lifan\Desktop\00_Outputs"
+PATIENT_LIST_FILE = fr"C:\\Users\\lifan\\Desktop\\03_Requests\\{FILETAG}.xlsx"
+DATA_FOLDER = fr"C:\\Users\\lifan\\Desktop\\04_SelectedData\\DataSelectedFor{FILETAG}"
+
+OUTPUT_FOLDER = r"C:\\Users\\lifan\\Desktop\\00_Outputs"
 
 # 标签设置
-DATETAG = "DRQ260122"
-NAMETAG = "2505IN_Daily_Day1-14"
-
-# 匹配设置
-MATCH_BY = 'sensor_id' # 'sensor_id', 'phone_number', 'hospital_id'
+DATETAG = "DRQ260122Nova"
+NAMETAG = f"{FILETAG}_Daily_D1-{DURING_DAY}"
 
 # 计算开关 (Feature Toggles)
 CALC_GROUPS = {
@@ -46,6 +58,92 @@ CALC_GROUPS = {
 
 # 每天最少需要点数
 MIN_LEN_NUM_PER_DAY = 12 * 24
+
+# --- Config ---
+def load_config(config_path):
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            return yaml.safe_load(f) or {}
+    except Exception:
+        return {}
+
+_config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
+config_data = load_config(_config_path)
+REQUEST_COLUMNS = config_data.get('request_columns', {})
+
+
+def _extract_request_series(df, spec):
+    if spec is None:
+        return None
+
+    if isinstance(spec, str):
+        spec_str = spec.strip()
+        if spec_str in df.columns:
+            return df[spec_str]
+        if spec_str.isdigit():
+            spec = int(spec_str)
+        else:
+            return None
+
+    if isinstance(spec, (int, np.integer)):
+        idx = int(spec)
+        if idx >= 1:
+            idx = idx - 1
+        if 0 <= idx < df.shape[1]:
+            return df.iloc[:, idx]
+        return None
+
+    return None
+
+
+def normalize_request_df(patient_df, request_columns):
+    standard_fields = [
+        'hospital_id',
+        'discharge_time',
+        'admission_time',
+        'sensor_id',
+        'phone_number',
+        'pump_start_time',
+        'pump_end_time'
+    ]
+
+    if isinstance(request_columns, dict) and request_columns:
+        out_df = patient_df.copy()
+        for field in standard_fields:
+            series = _extract_request_series(patient_df, request_columns.get(field))
+            if series is not None:
+                out_df[field] = series
+            elif field not in out_df.columns:
+                out_df[field] = np.nan
+        return out_df
+
+    if set(standard_fields).issubset(set(patient_df.columns)):
+        return patient_df
+
+    out_df = patient_df.copy()
+    if len(out_df.columns) >= 7:
+        out_df.columns = ['hospital_id', 'pump_start_time', 'pump_end_time', 'discharge_time', 'admission_time', 'sensor_id', 'phone_number'] + list(out_df.columns[7:])
+    elif len(out_df.columns) >= 6:
+        out_df.columns = ['hospital_id', 'pump_start_time', 'pump_end_time', 'discharge_time', 'admission_time', 'sensor_id'] + list(out_df.columns[6:])
+        if 'phone_number' not in out_df.columns:
+            out_df['phone_number'] = np.nan
+    elif len(out_df.columns) >= 5:
+        out_df.columns = ['hospital_id', 'pump_start_time', 'pump_end_time', 'discharge_time', 'admission_time'] + list(out_df.columns[5:])
+        if 'sensor_id' not in out_df.columns:
+            out_df['sensor_id'] = np.nan
+        if 'phone_number' not in out_df.columns:
+            out_df['phone_number'] = np.nan
+    else:
+        out_df['hospital_id'] = out_df.iloc[:, 0] if len(out_df.columns) >= 1 else np.nan
+        out_df['admission_time'] = np.nan
+        out_df['discharge_time'] = np.nan
+        out_df['pump_start_time'] = np.nan
+        out_df['pump_end_time'] = np.nan
+        out_df['sensor_id'] = np.nan
+        out_df['phone_number'] = np.nan
+
+    return out_df
+
 
 # --- 2. 核心计算函数 (复用自 01_02_Calculation.py) ---
 
@@ -204,6 +302,13 @@ def calc_range_stats(df, prefix=''):
     res[f'TAR2{prefix}'] = calc_ratio(np.sum(g > 13.9))
     res[f'TBR1{prefix}'] = calc_ratio(np.sum((g >= 3.0) & (g < 3.9)))
     res[f'TBR2{prefix}'] = calc_ratio(np.sum(g < 3.0))
+    res[f'GRI{prefix}'] = round(
+        3.0 * res[f'TBR2{prefix}']
+        + 2.4 * res[f'TBR1{prefix}']
+        + 1.6 * res[f'TAR2{prefix}']
+        + 0.8 * res[f'TAR1{prefix}'],
+        4
+    )
     res[f'TITR{prefix}'] = calc_ratio(np.sum((g >= 3.9) & (g <= 7.8)))
     
     if f'TIR{prefix}' in res and f'TITR{prefix}' in res:
@@ -606,14 +711,8 @@ def main():
     print(f"输出文件模板: CGM_{DATETAG}_{NAMETAG}_Mode{MODE}_Results.xlsx")
     
     try:
-        patient_df = pd.read_excel(PATIENT_LIST_FILE)
-        # 尝试匹配列名结构
-        if len(patient_df.columns) >= 7:
-            # 标准结构: Hospital ID, Pump Start, Pump End, Discharge, Admission, Sensor ID, Phone Number
-            patient_df.columns = ['hospital_id', 'pump_start_time', 'pump_end_time', 'discharge_time', 'admission_time', 'sensor_id', 'phone_number'] + list(patient_df.columns[7:])
-        elif len(patient_df.columns) >= 5:
-            # 简化结构: Hospital ID, Pump Start, Pump End, Discharge, Admission
-             patient_df.columns = ['hospital_id', 'pump_start_time', 'pump_end_time', 'discharge_time', 'admission_time'] + list(patient_df.columns[5:])
+        patient_df_raw = pd.read_excel(PATIENT_LIST_FILE)
+        patient_df = normalize_request_df(patient_df_raw, REQUEST_COLUMNS)
     except Exception as e:
         print(f"读取患者列表失败: {e}")
         return
@@ -622,19 +721,17 @@ def main():
     all_patients_data = []
     
     for index, row in patient_df.iterrows():
-        hospital_id = row['hospital_id']
-        admission_time = row['admission_time'] if 'admission_time' in row else None
-        discharge_time = row['discharge_time'] if 'discharge_time' in row else None
+        hospital_id = row.get('hospital_id', None)
+        admission_time = row.get('admission_time', None)
+        discharge_time = row.get('discharge_time', None)
         
         # Determine match_val
-        match_val = None
-        if MATCH_BY in row and pd.notna(row[MATCH_BY]): 
-            match_val = row[MATCH_BY]
-        elif 'sensor_id' in row and pd.notna(row['sensor_id']): 
-            match_val = row['sensor_id']
-        elif 'phone_number' in row and pd.notna(row['phone_number']): 
-            match_val = row['phone_number']
-        else: 
+        match_val = row.get(MATCH_BY, None) if MATCH_BY in patient_df.columns else None
+        if pd.isna(match_val) or match_val is None:
+            match_val = row.get('sensor_id', None)
+        if pd.isna(match_val) or match_val is None:
+            match_val = row.get('phone_number', None)
+        if pd.isna(match_val) or match_val is None:
             match_val = hospital_id
         
         patient_file = find_patient_file(match_val, DATA_FOLDER)

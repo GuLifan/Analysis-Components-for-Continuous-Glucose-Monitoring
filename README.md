@@ -1,8 +1,9 @@
-# Analysis-Components-for-Continuous-Glucose-Monitoring
+# CGM Analysis Project (DRQ260122)
 
-*GuLifan* (Trae AI Assisted with Gemini-3-Pro-Preview) LAST UPDATED: 2026-02-09 00:39
+#### *GuLifan* (Trae AI Assisted with Gemini-3-Pro-Preview) LAST UPDATED: 2026-02-09 00:39
 
-This repository contains CGM data processing tools developed for Dr. Qiang Wei's team in the Department of Endocrinology and Metabolism at the First Affiliated Hospital of XJTU. The related findings have been published and are prohibited from commercial use. For more information, please email me at my Outlook address or click on my ORCID.
+## 1. 项目简介 (Project Overview)
+本项目是一个用于**持续葡萄糖监测 (CGM) 数据处理与分析**的综合工具套件。旨在从原始 CGM 导出数据中提取临床相关的血糖指标，支持批量处理、多模式时间窗口切分、以及复杂的事件统计。
 
 **主要用途：**
 *   自动清洗和匹配患者数据。
@@ -20,6 +21,8 @@ This repository contains CGM data processing tools developed for Dr. Qiang Wei's
 ### 批处理与辅助脚本
 *   **`01_01_BatchRunner.py`**: **[批处理]** 批量运行工具。允许定义多个数据源任务列表（Tasks），依次调用 `01_02_Calculation.py` 进行大规模数据处理。
 *   **`config.yaml`**: **[配置]** 全局配置文件。存储默认的运行参数、路径设置和功能开关。
+*   **`02_02_CGMDaysExtractor.py`**: **[统计]** 计算每个CGM文件的总小时数与按24h折算的天数。
+*   **`00_06_BatchMerger.py`**: **[合并]** 按工作表同名逐表合并，唯一键为第1/5/6列；重复时保留非空列更多的行；第5/6列强制文本；按第一列升序。
 
 ### 预处理工具 (00系列)
 *   **`00_01_DataCleaning.py`**: 数据清洗脚本。用于检查患者列表文件（Data Request），剔除信息缺失（如无住院号、无关键时间点）的无效行。
@@ -49,7 +52,8 @@ This repository contains CGM data processing tools developed for Dr. Qiang Wei's
     *   MAGE (平均血糖波动幅度): 基于 Service 1970 定义，仅计算幅度 > 1SD 的有效波动。
     *   LAGE (最大血糖波动幅度): Max - Min。
 *   **`calc_range_stats(df)`**: 计算范围指标。
-    *   TIR, TAR, TBR, TITR, TITR, TAR1, TBR1, TAR2, TBR2。
+    *   TIR, TAR, TBR, TAR1, TAR2, TBR1, TBR2, TITR, TIR-TITR, GRI。
+    *   GRI = (3.0 × TBR2) + (2.4 × TBR1) + (1.6 × TAR2) + (0.8 × TAR1)。
 *   **`calc_event_stats(df)`**: 复杂的事件统计。
     *   低/高血糖事件次数及时间。支持简单事件（连续15min）及扩展事件（Extended Events，需判断恢复条件）。
 *   **`process_patient_file(...)`**: 单个患者的处理流。负责读取 Excel，根据 `Mode` 切分时间段，调用上述计算函数，并返回结果字典。
@@ -58,6 +62,7 @@ This repository contains CGM data processing tools developed for Dr. Qiang Wei's
 *   **用途**: 当需要分析患者**每一天**的具体表现时使用。
 *   **特点**: 输出 Excel 包含多个 Sheets (Day 1, Day 2, ...)，每个 Sheet 列出所有患者在该自然日的指标。
 *   **逻辑差异**: 强制对齐到自然日（从第1个有数据日期的 00:00 开始切分），确保“Day 1”代表一个绝对的 24 小时自然日区间（即使数据可能缺失）。
+*   **列映射**: 支持通过 `config.yaml -> request_columns` 指定前7列字段（hospital_id/pump_start_time/pump_end_time/discharge_time/admission_time/sensor_id/phone_number），无需改动 request 文件结构。
 
 ### 3.3 8 种计算模式 (Modes)
 用于定义“选取哪一段时间的数据”进行计算：
@@ -111,6 +116,15 @@ interimday: 0     # 间隔天数 (仅Mode 1使用)
 patient_list_file: "..."  # 患者列表 Excel 路径
 data_folder: "..."        # CGM 数据文件夹路径
 output_folder: "..."      # 结果输出路径
+# --- Request 前7列映射（支持列名或1-based列号） ---
+request_columns:
+  hospital_id: 1
+  pump_start_time: 2
+  pump_end_time: 3
+  discharge_time: 4
+  admission_time: 5
+  sensor_id: 6
+  phone_number: 7
 
 # --- 标签设置 ---
 datetag: "..."    # 日期标签 (出现在文件名中)
@@ -137,4 +151,7 @@ nametag: "..."    # 名称标签 (出现在文件名中)
 5.  **查看结果**: 脚本会自动调用 `01_02` 处理每个任务，并在控制台显示进度。结果将保存在 `OUTPUT_FOLDER` 中。
 
 ---
+## 6. 兼容性说明（pandas 字符串类型）
+- 为兼容 pandas 新的默认字符串 dtype（str），文本列选择同时包含 'object' 与 'str' 两种类型，避免未来版本的选择警告。
+- 推荐在环境中安装 pyarrow，以获得更好的字符串列性能（pandas 将在可用时默认使用 pyarrow 字符串后端）。
 Copyright (c) 2024-2026 GuLifan, Xi'an Jiaotong University. All Rights Reserved.
