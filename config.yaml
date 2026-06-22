@@ -1,58 +1,20 @@
-# --- 匹配设置 ---
-# 指定使用哪一列作为文件名匹配的关键字，可选: 'sensor_id'探头号, 'phone_number'手机号, 'hospital_id'住院号
 match_by: sensor_id
-
-# --- 输出设置 ---
-# True: 输出每日数据数组; False: 输出均值 (默认)
-daily_output: false
-
-# --- 功能组配置 ---
-# 设置为 true 开启计算，false 关闭计算
+daily_output: true
 calc_groups:
-  1: true   # (1) 基础指标组 (Basic Indicators Group): GMI, MEAN, CV, SD [强制开启]
-  2: true   # (2) 风险指标组 (Risk Indicators Group): LBGI, HBGI, ADRR, MODD
-  3: true   # (3) 血糖波动指标组 (Variability Group): MAGE, LAGE
-  4: true   # (4) 血糖范围指标组 (Range Group): TIR, TAR, TBR (all variants), TITR, 0-6/6-24 variants
-  5: true   # (5) Hourly Stats (0-6, 6-24): SD, MEAN, CV, VV, VVtime, FBS-CV
-  6: true   # (6) Event Stats: Hypo/Hyper Events (Count & Time) with complex logic
-  7: true   # (7) Level 2 Hypo Events (<3.0, >15min): Count & Time (All Day & Night)
-  8: true   # (8) Composite Hypo Events (A & B types with Min Val check)
-
-# --- 设置计算模式范围 ---
+  1: true
+  2: true
+  3: true
+  4: true
+  5: true
+  6: true
+  7: true
+  8: true
 mode: 0
-# 模式定义:
-# mode0: 开始时间~开始时间+duringday天，对应 D1-3、D1-5、D1-7、D1-14
-# mode1: 开始时间+interimday天~开始时间+duringday天，对应D9-14、D7-14、D6-11
-# mode2: 开始时间~结束时间，对应D all
-# mode3: 出院时间-duringday天~出院时间，对应出院前3天
-# mode4: 入院时间(实际上是血糖监测的开始时间)~出院时间，对应住院期间
-# mode5: 出院时间~出院时间+duringday天，对应出院后1周
-# mode6: 出院时间~结束时间，对应出院后全部时间
-# mode7: 胰岛素泵使用时间，对应胰岛素泵期间
-
-# 计算的时间段长度（天）
-duringday: 7
-# 中间天数（用于mode1）
+duringday: 14
 interimday: 8
-
-# --- 路径设置 ---
-# 注意：Windows路径中的反斜杠需要转义（使用双反斜杠 \\）
-patient_list_file: "C:\\Users\\lifan\\Desktop\\03_Requests\\2505EX.xlsx"
-data_folder: "C:\\Users\\lifan\\Desktop\\04_SelectedData\\DataSelectedFor2505EX"
-output_folder: "C:\\Users\\lifan\\Desktop\\00_Outputs"
-request_columns:
-  hospital_id: 1
-  pump_start_time: 6
-  pump_end_time: 7
-  discharge_time: 2
-  admission_time: 3
-  sensor_id: 4
-  phone_number: 5
-# --- 标签设置 ---
-datetag: DRQ260122Nova
-nametag: 2505EX_Day1-7
-# --- 输出文件名模板 ---
-# 可用变量: {datetag}, {nametag}, {mode}，例如CGM_DRQ260122_2505EX_Day1-7_Mode0_Results.xlsx
-output_filename_template: "CGM_{datetag}_{nametag}_Mode{mode}_Results.xlsx"
-
-
+patient_list_file: D:\LifanDataClaudeCode\CGM_DRQ_260618_R\requestall.csv
+data_folder: D:\LifanDataClaudeCode\CGM_DRQ_260618_R\02_OriginalData\CGMOriginalDataAll_260331
+output_folder: D:\LifanDataClaudeCode\CGM_DRQ_260618_R\00_Results
+datetag: DRQ260618
+nametag: Daily_D1-14
+output_filename_template: CGM_{datetag}_{nametag}_Mode{mode}_Results.xlsx

@@ -1,0 +1,20 @@
+match_by: sensor_id
+daily_output: false
+calc_groups:
+  1: true
+  2: true
+  3: true
+  4: true
+  5: true
+  6: true
+  7: true
+  8: true
+mode: 0
+duringday: 3
+interimday: 8
+patient_list_file: D:\LifanDataClaudeCode\CGM_DRQ_260618_Python\02_OriginalData\RequestList250601_260331.csv
+data_folder: D:\LifanDataClaudeCode\CGM_DRQ_260618_Python\02_OriginalData\CGMOriginalDataAll_260331
+output_folder: D:\LifanDataClaudeCode\CGM_DRQ_260618_Python\00_Outputs
+datetag: DRQ260618
+nametag: Daily_D1-3
+output_filename_template: CGM_{datetag}_{nametag}_Mode{mode}_Results.xlsx
